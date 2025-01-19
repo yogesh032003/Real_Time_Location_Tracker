@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Tracking App</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+    <style>
+        #map { height: 100vh; }
+        .user-location-icon, .client-location-icon {
+            font-size: 24px;
+        }
+        .user-location-icon {
+            color: #007bff;
+        }
+        .client-location-icon {
+            color: #ff0000; 
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script>
+        const socket = io();
+
+       
+        const map = L.map('map').setView([51.505, -0.09], 13);
+
+      
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19
+        }).addTo(map);
+
+    
+        let userMarkers = {};
+        let clientMarkers = {};
+
+        // Custom icons using Font Awesome
+        const userIcon = L.divIcon({
+            className: 'user-location-icon',
+            html: '<i class="fas fa-map-marker-alt"></i>',
+            iconSize: [30, 42],
+            iconAnchor: [15, 42]
+        });
+
+        const clientIcon = L.divIcon({
+            className: 'client-location-icon',
+            html: '<i class="fas fa-map-marker-alt"></i>',
+            iconSize: [30, 42],
+            iconAnchor: [15, 42]
+        });
+
+        // Function to update the user's location
+        function updateUserLocation(position) {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            const userId = 'user-' + Date.now(); // Unique ID for each user session
+
+            // Emit the location to the server
+            socket.emit("locationUpdate", { lat, lng, userId });
+
+            // Update or create the user marker
+            if (userMarkers[userId]) {
+                userMarkers[userId].setLatLng([lat, lng]);
+            } else {
+                userMarkers[userId] = L.marker([lat, lng], { icon: userIcon }).addTo(map);
+            }
+
+            map.setView([lat, lng]);
+        }
+
+        // Handle location updates from other clients
+        socket.on("locationUpdate", (location) => {
+            const { lat, lng, userId } = location;
+
+            // Update or create the client marker
+            if (clientMarkers[userId]) {
+                clientMarkers[userId].setLatLng([lat, lng]);
+            } else {
+                clientMarkers[userId] = L.marker([lat, lng], { icon: clientIcon }).addTo(map);
+            }
+        });
+
+        // Handle errors
+        function handleError(error) {
+            console.error('Error getting location:', error);
+            alert('Unable to retrieve your location. Please ensure location services are enabled.');
+        }
+
+        // Use high accuracy to track the user's location
+        if (navigator.geolocation) {
+            navigator.geolocation.watchPosition(updateUserLocation, handleError, {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            });
+        } else {
+            alert('Geolocation is not supported by your browser.');
+        }
+    </script>
+</body>
+</html>
